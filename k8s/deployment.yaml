@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-tp-app
+  namespace: devops-tp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: devops-tp
+  template:
+    metadata:
+      labels:
+        app: devops-tp
+    spec:
+      containers:
+      - name: app
+        image: DOCKER_IMAGE_PLACEHOLDER
+        ports:
+        - containerPort: 3000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
