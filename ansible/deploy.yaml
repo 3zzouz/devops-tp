@@ -1,18 +1,17 @@
+---
 - hosts: localhost
   gather_facts: false
-  vars:
-    docker_image: "{{ lookup('env', 'DOCKER_IMAGE') }}"
-    build_number: "{{ lookup('env', 'BUILD_NUMBER') }}"
   tasks:
     - name: Substituer l'image dans le Deployment
-      command: >
-        sed -i "s|DOCKER_IMAGE_PLACEHOLDER|{{ docker_image }}:{{ build_number }}|g"
-        ../k8s/deployment.yaml
+      shell: |
+        sed -i "s|DOCKER_IMAGE_PLACEHOLDER|{{ lookup('env', 'DOCKER_IMAGE') }}:{{ lookup('env', 'BUILD_NUMBER') }}|g" k8s/deployment.yaml
+
     - name: Appliquer les manifests Kubernetes
-      command: kubectl apply -f ../k8s/
+      shell: kubectl apply -f k8s/ --validate=false
       environment:
-        KUBECONFIG: "{{ lookup('env', 'KUBECONFIG_PATH') }}"
+        KUBECONFIG: /var/jenkins_home/.kube/config
+
     - name: Attendre que le Deployment soit prêt
-      command: >
-        kubectl rollout status deployment/devops-tp-app
-        -n devops-tp --timeout=120s
+      shell: kubectl rollout status deployment/devops-tp-app -n devops-tp --timeout=120s
+      environment:
+        KUBECONFIG: /var/jenkins_home/.kube/config
