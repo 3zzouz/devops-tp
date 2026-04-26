@@ -1,0 +1,10 @@
+{
+  "name": "devops-tp-app",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "jest --coverage --coverageReporters=lcov"
+  },
+  "dependencies": { "express": "^4.18.2" },
+  "devDependencies": { "jest": "^29.0.0", "supertest": "^6.3.0" }
+}
