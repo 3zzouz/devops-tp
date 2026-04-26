@@ -1,27 +1,44 @@
 pipeline {
-
   agent any
+
   environment {
-    DOCKER_IMAGE = 'azizdh091/devops-tp-app'
+    DOCKER_IMAGE = '3zzouz/devops-tp-app'
     SONAR_TOKEN  = credentials('sonarqube-token')
   }
+
   stages {
+
     stage('Checkout') {
-      steps { checkout scm }
-    }
-    stage('Install') {
-      steps { dir('app') { sh 'npm ci' } }
-    }
-    stage('Unit Tests') {
-      steps { dir('app') { sh 'npm test' } }
-    }
-    stage('SonarQube Analysis') {
       steps {
-        withSonarQubeEnv('sonarqube') {
-          dir('app') { sh 'sonar-scanner -Dsonar.token=${SONAR_TOKEN}' }
+        checkout scm
+      }
+    }
+
+    stage('Install & Test') {
+      agent {
+        docker {
+          image 'node:18-alpine'
+          reuseNode true
+        }
+      }
+      steps {
+        dir('app') {
+          sh 'npm ci'
+          sh 'npm test'
         }
       }
     }
+
+    stage('SonarQube Analysis') {
+      steps {
+        withSonarQubeEnv('sonarqube') {
+          dir('app') {
+            sh 'sonar-scanner -Dsonar.token=${SONAR_TOKEN}'
+          }
+        }
+      }
+    }
+
     stage('Quality Gate') {
       steps {
         timeout(time: 5, unit: 'MINUTES') {
@@ -29,9 +46,13 @@ pipeline {
         }
       }
     }
+
     stage('Docker Build') {
-      steps { sh 'docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} ./app' }
+      steps {
+        sh 'docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} ./app'
+      }
     }
+
     stage('Trivy Scan') {
       steps {
         sh '''
@@ -43,8 +64,13 @@ pipeline {
             ${DOCKER_IMAGE}:${BUILD_NUMBER}
         '''
       }
-      post { always { archiveArtifacts 'trivy-report.txt' } }
+      post {
+        always {
+          archiveArtifacts 'trivy-report.txt'
+        }
+      }
     }
+
     stage('Docker Push') {
       steps {
         withCredentials([usernamePassword(
@@ -57,7 +83,9 @@ pipeline {
         }
       }
     }
+
   }
+
   post {
     success { echo '✅ Pipeline réussi !' }
     failure { echo '❌ Pipeline échoué — voir les logs.' }
