@@ -6,62 +6,91 @@ pipeline {
     KUBECONFIG_PATH = credentials('kubeconfig')
   }
   stages {
-    stage('Checkout')  { steps { checkout scm } }
-    stage('Install')   { steps { dir('app') { sh 'npm ci' } } }
-
-    stage('Unit Tests') {
-      steps { dir('app') { sh 'npm test -- --coverage' } }
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
     }
-
+    stage('Install & Test') {
+      agent {
+        docker {
+          image 'node:18-alpine'
+          reuseNode true
+        }
+      }
+      steps {
+        dir('app') {
+          sh 'npm ci'
+          sh 'npm test'
+        }
+      }
+    }
     stage('SonarQube Analysis') {
-      steps { withSonarQubeEnv('sonarqube') {
-        dir('app') { sh 'sonar-scanner -Dsonar.token=${SONAR_TOKEN}' }
-      }}
+      steps {
+        withSonarQubeEnv('sonarqube') {
+          dir('app') {
+            withEnv(["PATH+SONAR=${tool 'sonar-scanner'}/bin"]) {
+              sh 'sonar-scanner -Dsonar.token=${SONAR_TOKEN}'
+            }
+          }
+        }
+      }
     }
-
     stage('Quality Gate') {
-      steps { timeout(time:5, unit:'MINUTES') {
-        waitForQualityGate abortPipeline: true
-      }}
+      steps {
+        timeout(time: 5, unit: 'MINUTES') {
+          waitForQualityGate abortPipeline: true
+        }
+      }
     }
-
     stage('Docker Build') {
-      steps { sh 'docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} ./app' }
+      steps {
+        sh 'docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest ./app'
+      }
     }
-
     stage('Trivy Scan') {
       steps {
         sh '''
-          trivy image --exit-code 0 --severity HIGH,CRITICAL \
+          trivy image \
+            --exit-code 0 \
+            --severity HIGH,CRITICAL \
             --format table \
             --output trivy-report.txt \
             ${DOCKER_IMAGE}:${BUILD_NUMBER}
         '''
       }
-      post { always { archiveArtifacts artifacts: 'trivy-report.txt' } }
+      post {
+        always {
+          archiveArtifacts 'trivy-report.txt'
+        }
+      }
     }
-
     stage('Docker Push') {
       steps {
-        withCredentials([usernamePassword(credentialsId:'dockerhub-creds',
-          usernameVariable:'DOCKER_USER', passwordVariable:'DOCKER_PASS')]) {
+        withCredentials([usernamePassword(
+            credentialsId: 'dockerhub-creds',
+            usernameVariable: 'DOCKER_USER',
+            passwordVariable: 'DOCKER_PASS')]) {
           sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
           sh 'docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}'
           sh 'docker push ${DOCKER_IMAGE}:latest'
         }
       }
     }
-
     stage('Terraform Apply') {
-      steps { dir('terraform') {
-        sh 'terraform init && terraform apply -auto-approve'
-      }}
+      steps {
+        dir('terraform') {
+          sh 'terraform init && terraform apply -auto-approve'
+        }
+      }
     }
-
     stage('Ansible Deploy') {
-      steps { sh 'ansible-playbook ansible/deploy.yaml' }
+      steps {
+        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+          sh 'ansible-playbook ansible/deploy.yaml'
+        }
+      }
     }
-
     stage('Smoke Test') {
       steps {
         sh 'sleep 15'
@@ -69,9 +98,8 @@ pipeline {
       }
     }
   }
-
   post {
-    success { echo 'Pipeline SUCCÈS – Application déployée !' }
-    failure { echo 'Pipeline ÉCHEC – vérifier les logs ci-dessus.' }
+    success { echo '✅ Pipeline réussi !' }
+    failure { echo '❌ Pipeline échoué — voir les logs.' }
   }
 }
