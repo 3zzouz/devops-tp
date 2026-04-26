@@ -91,12 +91,19 @@ pipeline {
         }
       }
     }
-    stage('Smoke Test') {
-      steps {
-        sh 'sleep 15'
-        sh 'curl -f http://localhost:30080/health || exit 1'
-      }
-    }
+   stage('Smoke Test') {
+  steps {
+    sh 'sleep 15'
+    sh '''
+      NODE_IP=$(kubectl get nodes devops-tp-worker \
+        -o jsonpath="{.status.addresses[0].address}")
+      curl -f http://${NODE_IP}:30080/health || exit 1
+    '''
+  }
+  environment {
+    KUBECONFIG: '/var/jenkins_home/.kube/config'
+  }
+}
   }
   post {
     success { echo '✅ Pipeline réussi !' }
