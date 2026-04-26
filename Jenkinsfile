@@ -1,16 +1,20 @@
 pipeline {
   agent any
+
   environment {
-    DOCKER_IMAGE    = 'azizdh091/devops-tp-app'
-    SONAR_TOKEN     = credentials('sonarqube-token')
-    KUBECONFIG_PATH = credentials('kubeconfig')
+    DOCKER_IMAGE = 'azizdh091/devops-tp-app'
+    SONAR_TOKEN  = credentials('sonarqube-token')
+    KUBECONFIG   = '/var/jenkins_home/.kube/config'
   }
+
   stages {
+
     stage('Checkout') {
       steps {
         checkout scm
       }
     }
+
     stage('Install & Test') {
       agent {
         docker {
@@ -25,6 +29,7 @@ pipeline {
         }
       }
     }
+
     stage('SonarQube Analysis') {
       steps {
         withSonarQubeEnv('sonarqube') {
@@ -36,6 +41,7 @@ pipeline {
         }
       }
     }
+
     stage('Quality Gate') {
       steps {
         timeout(time: 5, unit: 'MINUTES') {
@@ -43,11 +49,13 @@ pipeline {
         }
       }
     }
+
     stage('Docker Build') {
       steps {
         sh 'docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest ./app'
       }
     }
+
     stage('Trivy Scan') {
       steps {
         sh '''
@@ -65,6 +73,7 @@ pipeline {
         }
       }
     }
+
     stage('Docker Push') {
       steps {
         withCredentials([usernamePassword(
@@ -77,6 +86,7 @@ pipeline {
         }
       }
     }
+
     stage('Terraform Apply') {
       steps {
         dir('terraform') {
@@ -84,27 +94,27 @@ pipeline {
         }
       }
     }
+
     stage('Ansible Deploy') {
       steps {
-        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-          sh 'ansible-playbook ansible/deploy.yaml'
-        }
+        sh 'ansible-playbook ansible/deploy.yaml'
       }
     }
-   stage('Smoke Test') {
-  steps {
-    sh 'sleep 15'
-    sh '''
-      NODE_IP=$(kubectl get nodes devops-tp-worker \
-        -o jsonpath="{.status.addresses[0].address}")
-      curl -f http://${NODE_IP}:30080/health || exit 1
-    '''
+
+    stage('Smoke Test') {
+      steps {
+        sh 'sleep 15'
+        sh '''
+          NODE_IP=$(kubectl get nodes devops-tp-worker \
+            -o jsonpath="{.status.addresses[0].address}")
+          echo "Testing http://${NODE_IP}:30080/health"
+          curl -f http://${NODE_IP}:30080/health || exit 1
+        '''
+      }
+    }
+
   }
-  environment {
-    KUBECONFIG: '/var/jenkins_home/.kube/config'
-  }
-}
-  }
+
   post {
     success { echo '✅ Pipeline réussi !' }
     failure { echo '❌ Pipeline échoué — voir les logs.' }
