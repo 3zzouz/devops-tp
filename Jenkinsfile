@@ -2,7 +2,7 @@ pipeline {
   agent any
 
   environment {
-    DOCKER_IMAGE = '3zzouz/devops-tp-app'
+    DOCKER_IMAGE = 'azizdh091/devops-tp-app'
     SONAR_TOKEN  = credentials('sonarqube-token')
   }
 
