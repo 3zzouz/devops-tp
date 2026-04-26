@@ -1,13 +1,17 @@
 ---
 - hosts: localhost
   gather_facts: false
+  vars:
+    workspace: "{{ lookup('env', 'WORKSPACE') }}"
+    docker_image: "{{ lookup('env', 'DOCKER_IMAGE') }}"
+    build_number: "{{ lookup('env', 'BUILD_NUMBER') }}"
   tasks:
     - name: Substituer l'image dans le Deployment
       shell: |
-        sed -i "s|DOCKER_IMAGE_PLACEHOLDER|{{ lookup('env', 'DOCKER_IMAGE') }}:{{ lookup('env', 'BUILD_NUMBER') }}|g" k8s/deployment.yaml
+        sed -i "s|DOCKER_IMAGE_PLACEHOLDER|{{ docker_image }}:{{ build_number }}|g" {{ workspace }}/k8s/deployment.yaml
 
     - name: Appliquer les manifests Kubernetes
-      shell: kubectl apply -f k8s/ --validate=false
+      shell: kubectl apply -f {{ workspace }}/k8s/ --validate=false
       environment:
         KUBECONFIG: /var/jenkins_home/.kube/config
 
