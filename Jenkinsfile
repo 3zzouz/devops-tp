@@ -33,7 +33,9 @@ pipeline {
       steps {
         withSonarQubeEnv('sonarqube') {
           dir('app') {
-            sh 'sonar-scanner -Dsonar.token=${SONAR_TOKEN}'
+            withEnv(["PATH+SONAR=${tool 'sonar-scanner'}/bin"]) {
+              sh 'sonar-scanner -Dsonar.token=${SONAR_TOKEN}'
+            }
           }
         }
       }
